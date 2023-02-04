@@ -1,12 +1,12 @@
 import { debounce } from "obsidian"
-import { settingChanges } from "src/filesystem"
+import { PluginSettings, settingChanges } from "src/filesystem"
 import Plugin from "src/main"
 import { EventListeners } from "./event-listeners"
 import View from "./view"
 import { ViewCreatorManager } from "./view-creator-manager"
 import { Views } from "./view-manager"
 
-export async function registerEvents(plugin: Plugin, listeners: EventListeners, views: Views, setViewCreator: ViewCreatorManager['setViewCreator']) {
+export async function registerEvents(plugin: Plugin, listeners: EventListeners, views: Views, setViewCreator: ViewCreatorManager['setViewCreator'], settings: PluginSettings) {
   listeners.appLoading(setViewCreator);
   const mindmapLayoutReady = new Promise(resolve =>
     app.workspace.onLayoutReady(() =>
@@ -60,6 +60,27 @@ export async function registerEvents(plugin: Plugin, listeners: EventListeners, 
   settingChanges.listen("depth3Thickness", views.renderAll);
   settingChanges.listen("colorFreezeLevel", views.renderAll);
 
-  // Update title as root node
+  //
   settingChanges.listen("titleAsRootNode", views.renderAll);
+
+  // Use theme font
+  // Would be nice if features could listen to events
+  // This feature requires all views to rerender when the settings change,
+  // otherwise the svgs which didn't re-render will still have the old styles 
+  const useThemeFont = () => {
+    if (settings.useThemeFont)
+      document.body.classList.add("mmng-use-theme-font")
+    else
+      document.body.classList.remove("mmng-use-theme-font")
+    views.renderAll();
+  }
+  useThemeFont();
+  settingChanges.listen("useThemeFont", useThemeFont);
+  const originalSetTheme = app.customCss.setTheme.bind(app.customCss);
+  app.customCss.setTheme = theme => {
+    if (settings.useThemeFont)
+      views.renderAll();
+    return originalSetTheme(theme);
+  }
+  plugin.register(() => app.customCss.setTheme = originalSetTheme);
 }
